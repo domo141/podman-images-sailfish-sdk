@@ -1,0 +1,96 @@
+#!/bin/sh
+#
+# "fake" VBoxManage to support Sailfish OS Build Engine in 'podman' container
+
+# Some content copied 2019-07-29 from (among other files there...)
+#     CODeRUS/docker-sailfishos-buildengine/blob/master/helpers/VBoxManage
+
+case ${BASH_VERSION-} in *.*) set -o posix; shopt -s xpg_echo; esac
+case ${ZSH_VERSION-} in *.*) emulate ksh; esac
+
+set -euf  # hint: sh -x thisfile [args] to trace execution
+
+die () { printf '%s\n' "$*"; exit 1; } >&2
+
+#echo `exec date +'%Y-%m-%d %H:%M:%S'`: $# "'$*'" >>$HOME/tmp/vboxmanage.log
+
+running () { test "`exec podman ps -f name=sailfishos-buildengine -q`"; }
+
+maysetx=
+start () {
+	#eval userdir=~$USER
+	sdk=`exec sed -n '/^Exec=/ { s/.....//; s:/bin/qtcreator.*::; p; q; }'\
+	    "$HOME/.local/share/applications/SailfishOS-SDK-qtcreator.desktop"`
+	#sdk=${sdk:-$userdir/SailfishOS}
+
+	test "$sdk" || die "Cannot find SailfishOS SDK install path"
+
+	# some tests to see $sdk is perhaps sane...
+	for d in "$sdk/mersdk/ssh" "$sdk/mersdk/targets" "$sdk/vmshare"
+	do
+		test -d "$d" || die "'$d/' suspiciously missing..."
+	done
+
+	$maysetx
+	podman run -d --rm --privileged \
+		-p '127.0.0.1:2222:2222' \
+		-p '127.0.0.1:8080:8080' \
+		-v "$HOME:/home/mersdk/share" \
+		-v "$HOME:/home/src1" \
+		-v "$sdk/mersdk/ssh:/etc/ssh/authorized_keys" \
+		-v "$sdk/mersdk/targets:/host_targets" \
+		-v "$sdk/vmshare:/etc/mersdk/share" \
+		--tmpfs=/tmp:rw,size=65536k,mode=1777 \
+		--name sailfishos-buildengine \
+		sailfishos-buildengine:3.1.0.12 /sbin/minute.pl
+}
+
+# ref2: https://www.virtualbox.org/manual/ch08.html#vboxmanage-showvminfo
+
+case $#' '$*
+in '2 list runningvms')
+	running || exit 0
+	echo '"Sailfish OS Build Engine" {a8481bdf-df28-4bdc-b555-c19ac4c8185d}'
+
+;; '2 showvminfo Sailfish OS Build Engine')
+	running || exit 0
+	echo 'Name:            Sailfish OS Build Engine'
+	echo 'Session name:    headless'
+
+;; '2 showvminfo Sailfish OS Emulator'*)
+	: no, we do not have that :
+
+;; '3 showvminfo Sailfish OS Build Engine --machinereadable')
+	running || exit 0
+	echo 'UUID=a8481bdf-df28-4bdc-b555-c19ac4c8185d' # well, something...
+
+;; '3 controlvm Sailfish OS Build Engine acpipowerbutton')
+	if running
+	then podman stop -t 1 sailfishos-buildengine
+	else start
+	fi
+
+;; '4 startvm Sailfish OS Build Engine'*)
+	start
+
+;; '1 --version')
+	echo vboxmanage substitute for sailfishos buildengine via podman v1
+
+# -- user convenience extras -- not in VirtualBox VBoxManage(1) -- #
+
+;; '1 start') maysetx='set -x'; start
+;; '1 stop') podman stop -t 1 sailfishos-buildengine
+;; '1 shell') set -x; exec podman exec -it sailfishos-buildengine bash
+
+;; *)
+	echo "unhandled command ($# args) '$*'" >&2
+	exit 1
+esac
+
+
+# Local variables:
+# mode: shell-script
+# sh-basic-offset: 8
+# tab-width: 8
+# End:
+# vi: set sw=8 ts=8

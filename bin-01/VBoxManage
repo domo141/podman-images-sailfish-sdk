@@ -1,0 +1,13 @@
+#!/bin/sh
+
+set -euf
+
+# SailfishOS SDK Installer (as of 2019-08) is satisfied if VBoxManage exists
+# Log commands. Hint: sed -n /:::/,/Done/p ~/SailfishOS/InstallationLog.txt
+
+# SPDX-License-Identifier: CC0-1.0
+
+exec >&2
+echo `exec /bin/date +'%H:%M:%S'` :::${0##*/}::: $# args:
+printf '  %s\n' "$@"
+echo
