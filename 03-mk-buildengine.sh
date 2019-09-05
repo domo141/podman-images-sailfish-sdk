@@ -6,7 +6,7 @@
 #           All rights reserved
 #
 # Created: Fri 02 Aug 2019 14:37:08 EEST too
-# Last modified: Tue 13 Aug 2019 22:21:11 +0300 too
+# Last modified: Tue 27 Aug 2019 00:01:12 +0300 too
 
 # SPDX-License-Identifier: Apache-2.0
 
@@ -83,6 +83,11 @@ then
 		--name sailfishos-buildengine-wip --env trgver=$trgver \
 		sailfish-sdk-mer-vdi:$sdkver /mnt/"${0##*/}" --in-container--
 	echo 'back in "host" environment...'
+
+	x podman unshare sh -eufxc '
+		mp=`exec podman mount sailfishos-buildengine-wip`
+		( cd "$mp"; rm -rfv run; exec mkdir -m 755 run )
+	'
 	x podman commit sailfishos-buildengine-wip sailfishos-buildengine:$trgver
 	podman rm sailfishos-buildengine-wip
 	echo
